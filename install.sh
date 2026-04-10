@@ -1,19 +1,58 @@
 #!/bin/bash
 # ============================================================================
-# Clawuno — One-Click Installer
+# Clawuno — Installer
 #
-# This script is hosted at https://releases.clawuno.com/install.sh
-# Users run it with:
+# Mode 1 — One-click install (downloads latest from CDN):
 #   curl -fsSL https://releases.clawuno.com/install.sh | bash
 #
+# Mode 2 — Local package (from GitHub Releases or manual download):
+#   bash install.sh clawuno-0.6.6-macos-arm64.tar.gz [--dir ~/clawuno] [--port 9700]
+#
 # What it does:
-#   1. Detects platform (macOS arm64/x64, Linux x64/arm64)
-#   2. Fetches latest version from releases.clawuno.com/latest.json
-#   3. Downloads the release package and verifies SHA256
-#   4. Runs install.sh from the package
+#   Mode 1: Detects platform → fetches latest.json → downloads package → installs
+#   Mode 2: Uses the provided local .tar.gz directly → installs
 # ============================================================================
 
 set -euo pipefail
+
+# ── Mode 2: Local package provided as first argument ─────────
+# If the first argument is a .tar.gz or .zip file, skip the download entirely
+if [[ "${1:-}" == *.tar.gz ]] || [[ "${1:-}" == *.zip ]]; then
+  LOCAL_PKG="$1"
+  shift  # remove the package path; remaining args passed to install.sh
+
+  if [ ! -f "$LOCAL_PKG" ]; then
+    echo ""
+    echo "ERROR: File not found: $LOCAL_PKG"
+    echo ""
+    exit 1
+  fi
+
+  echo ""
+  echo "========================================"
+  echo "  Clawuno — Installer"
+  echo "========================================"
+  echo ""
+  echo "  Package: $(basename "$LOCAL_PKG")"
+  echo ""
+
+  # Remove macOS quarantine if present (silently — not all systems have xattr)
+  xattr -r -d com.apple.quarantine "$LOCAL_PKG" 2>/dev/null || true
+
+  TMP_DIR=$(mktemp -d /tmp/clawuno-install-XXXXXX)
+  echo "  Extracting..."
+  tar xzf "$LOCAL_PKG" -C "$TMP_DIR"
+
+  RELEASE_DIR=$(find "$TMP_DIR" -maxdepth 1 -mindepth 1 -type d | head -1)
+  if [ -z "$RELEASE_DIR" ] || [ ! -f "$RELEASE_DIR/install.sh" ]; then
+    echo "ERROR: Invalid release package."
+    rm -rf "$TMP_DIR"
+    exit 1
+  fi
+
+  chmod +x "$RELEASE_DIR/install.sh"
+  exec "$RELEASE_DIR/install.sh" "$@"
+fi
 
 # ── Version comparison ────────────────────────────────────────
 # version_gt A B — returns 0 (true) if A is strictly newer than B.
@@ -162,7 +201,7 @@ FILENAME=$(basename "$DOWNLOAD_URL")
 TAR_PATH="$TMP_DIR/$FILENAME"
 
 echo "  Downloading $FILENAME..."
-curl -fsSL --progress-bar "$DOWNLOAD_URL" -o "$TAR_PATH" || {
+curl -fL --progress-bar "$DOWNLOAD_URL" -o "$TAR_PATH" || {
   echo ""
   echo "ERROR: Download failed."
   rm -rf "$TMP_DIR"

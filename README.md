@@ -8,17 +8,39 @@ Clawuno lets you build, run, and manage AI agents that execute real work — aut
 
 ## Install
 
-**macOS & Linux — one command:**
+### macOS — One-click
 
 ```bash
 curl -fsSL https://releases.clawuno.com/install.sh | bash
 ```
 
-Then open your browser at `http://localhost:9700`.
+### macOS — Download from GitHub Releases
 
-**Requirements:** macOS 12+ or Linux (x64/arm64). No Docker, no external database, no Node.js required — the installer is self-contained.
+Download `install.sh` and the package for your Mac from the [Releases page](https://github.com/clawuno/clawuno/releases/latest), then run:
 
-**Windows:** See [Windows installation](https://clawuno.com/docs/install#windows).
+```bash
+# Apple Silicon (M1/M2/M3)
+bash install.sh clawuno-0.6.7-macos-arm64.tar.gz
+
+# Intel
+bash install.sh clawuno-0.6.7-macos-x64.tar.gz
+```
+
+### Windows — One-click (PowerShell)
+
+```powershell
+irm https://releases.clawuno.com/install.ps1 | iex
+```
+
+### Windows — Download from GitHub Releases
+
+Download `install.ps1` and `clawuno-0.6.7-windows-x64.zip` from the [Releases page](https://github.com/clawuno/clawuno/releases/latest), then run:
+
+```powershell
+.\install.ps1 clawuno-0.6.7-windows-x64.zip
+```
+
+**Requirements:** macOS 12+ or Windows 10+. No Docker, no external database, no Node.js required — the installer is self-contained.
 
 ---
 
@@ -56,8 +78,7 @@ Each release includes platform-specific packages:
 |----------|------|
 | macOS Apple Silicon | `clawuno-{version}-macos-arm64.tar.gz` |
 | macOS Intel | `clawuno-{version}-macos-x64.tar.gz` |
-| Linux x64 | `clawuno-{version}-linux-x64.tar.gz` |
-| Linux arm64 | `clawuno-{version}-linux-arm64.tar.gz` |
+| Windows x64 | `clawuno-{version}-windows-x64.zip` |
 
 ---
 
