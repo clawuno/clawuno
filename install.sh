@@ -181,12 +181,29 @@ if command -v clawuno &>/dev/null; then
   elif [ "$INSTALLED_VERSION" = "$VERSION" ]; then
     echo "  Already up to date."
     echo ""
-    read -r -p "  Reinstall anyway? [y/N] " confirm
-    if [ "$(echo "$confirm" | tr '[:upper:]' '[:lower:]')" != "y" ]; then
-      echo "  Aborted."
+
+    # Detect whether we can read from the user's terminal.
+    # In `curl ... | bash` mode stdin is the pipe (no tty).
+    # /dev/tty lets us read directly from the terminal if it exists.
+    if [ -r /dev/tty ] && [ -t 1 ]; then
+      echo "  Reinstalling will:"
+      echo "    - Restore program files to a clean state"
+      echo "    - Preserve all your data, settings, and workspaces"
+      echo "    - Create a pre-install backup automatically"
+      echo ""
+      read -r -p "  Reinstall? [y/N] " confirm < /dev/tty
+      if [ "$(echo "$confirm" | tr '[:upper:]' '[:lower:]')" != "y" ]; then
+        echo "  Aborted."
+        exit 0
+      fi
+      echo ""
+    else
+      # No terminal available (e.g. non-interactive pipe). Cannot prompt safely.
+      echo "  To reinstall, download the package and run install.sh locally:"
+      echo "    https://github.com/clawuno/clawuno/releases/latest"
+      echo ""
       exit 0
     fi
-    echo ""
   else
     echo "  Current version ($INSTALLED_VERSION) is newer than latest release ($VERSION). Nothing to do."
     echo ""

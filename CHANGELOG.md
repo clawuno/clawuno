@@ -4,6 +4,18 @@ All notable changes to Clawuno are documented here.
 
 ---
 
+## v0.6.8 — 2026-04-14
+
+### New
+
+- **`@` quick-insert in Agent Chat** — reference workspace files directly from the composer.
+
+### Fixed
+
+- Various bug fixes and stability improvements.
+
+---
+
 ## v0.6.7 — 2026-04-10
 
 ### New
