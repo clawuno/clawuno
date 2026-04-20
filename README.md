@@ -20,10 +20,10 @@ Download `install.sh` and the package for your Mac from the [Releases page](http
 
 ```bash
 # Apple Silicon (M1/M2/M3)
-bash install.sh clawuno-0.6.8-macos-arm64.tar.gz
+bash install.sh clawuno-0.6.9-macos-arm64.tar.gz
 
 # Intel
-bash install.sh clawuno-0.6.8-macos-x64.tar.gz
+bash install.sh clawuno-0.6.9-macos-x64.tar.gz
 ```
 
 ### Windows — One-click (PowerShell)
@@ -34,10 +34,10 @@ irm https://releases.clawuno.com/install.ps1 | iex
 
 ### Windows — Download from GitHub Releases
 
-Download `install.ps1` and `clawuno-0.6.8-windows-x64.zip` from the [Releases page](https://github.com/clawuno/clawuno/releases/latest), then run:
+Download `install.ps1` and `clawuno-0.6.9-windows-x64.zip` from the [Releases page](https://github.com/clawuno/clawuno/releases/latest), then run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 clawuno-0.6.8-windows-x64.zip
+powershell -ExecutionPolicy Bypass -File .\install.ps1 clawuno-0.6.9-windows-x64.zip
 ```
 
 The `-ExecutionPolicy Bypass` flag is required for locally downloaded scripts on Windows. The one-click `irm | iex` method above does not need this because it runs the script via pipeline.
