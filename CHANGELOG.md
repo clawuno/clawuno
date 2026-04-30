@@ -4,6 +4,20 @@ All notable changes to Clawuno are documented here.
 
 ---
 
+## v0.7.0 — 2026-04-21
+
+### New
+
+- **macOS Intel (x64) support** — Clawuno now runs on Intel Macs
+  starting from macOS 11 (Big Sur). The installer automatically
+  picks the right package for your architecture.
+
+### Fixed
+
+- Various bug fixes and stability improvements.
+
+---
+
 ## v0.6.9 — 2026-04-20
 
 ### New

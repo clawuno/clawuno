@@ -139,10 +139,44 @@ manifest=$(curl -fsSL "$MANIFEST_URL" 2>/dev/null) || {
   exit 1
 }
 
-# Parse version and download URL for this platform (use python3 for reliable JSON parsing)
-VERSION=$(echo "$manifest" | python3 -c "import sys,json; print(json.load(sys.stdin)['version'])")
-DOWNLOAD_URL=$(echo "$manifest" | python3 -c "import sys,json; d=json.load(sys.stdin)['platforms'].get('${PLATFORM_KEY}',{}); print(d.get('url',''))")
-EXPECTED_SHA256=$(echo "$manifest" | python3 -c "import sys,json; d=json.load(sys.stdin)['platforms'].get('${PLATFORM_KEY}',{}); print(d.get('sha256',''))")
+# Parse version and download URL for this platform.
+#
+# Why not python3: /usr/bin/python3 on macOS is a Command Line Tools stub
+# that dies with "xcrun: error: invalid active developer path" on any Mac
+# without CLT. Requiring CLT to install Clawuno is unacceptable for end
+# users.
+#
+# Why not plutil: macOS pre-13 ships a plutil that doesn't understand
+# stdin JSON input or `raw` output — both needed here. The matrix of
+# "works on modern macOS but not Big Sur" is a debugging minefield.
+#
+# So: parse with sed + awk/grep. The manifest schema is stable (we
+# control the producer), 2-space indented, so extraction is simple and
+# portable across all POSIX shells.
+
+# Extract the top-level "version" string.
+parse_version() {
+  printf '%s\n' "$manifest" \
+    | sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    | head -n 1
+}
+
+# Extract a string field from the block under `platforms.<platform_key>`.
+# `grep -A 3` captures the next 3 lines after the key match — enough to
+# cover `"url": ...` and `"sha256": ...` in the two-line field block.
+# Empty result on missing platform.
+parse_platform_field() {
+  local platform_key="$1" field="$2"
+  printf '%s\n' "$manifest" \
+    | grep -A 3 "\"${platform_key}\":" \
+    | grep "\"${field}\"" \
+    | sed -n "s/.*\"${field}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" \
+    | head -n 1
+}
+
+VERSION=$(parse_version)
+DOWNLOAD_URL=$(parse_platform_field "$PLATFORM_KEY" "url")
+EXPECTED_SHA256=$(parse_platform_field "$PLATFORM_KEY" "sha256")
 
 if [ -z "$VERSION" ]; then
   echo ""

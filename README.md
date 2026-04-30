@@ -20,10 +20,10 @@ Download `install.sh` and the package for your Mac from the [Releases page](http
 
 ```bash
 # Apple Silicon (M1/M2/M3)
-bash install.sh clawuno-0.6.9-macos-arm64.tar.gz
+bash install.sh clawuno-0.7.0-macos-arm64.tar.gz
 
 # Intel
-bash install.sh clawuno-0.6.9-macos-x64.tar.gz
+bash install.sh clawuno-0.7.0-macos-x64.tar.gz
 ```
 
 ### Windows — One-click (PowerShell)
@@ -34,15 +34,15 @@ irm https://releases.clawuno.com/install.ps1 | iex
 
 ### Windows — Download from GitHub Releases
 
-Download `install.ps1` and `clawuno-0.6.9-windows-x64.zip` from the [Releases page](https://github.com/clawuno/clawuno/releases/latest), then run:
+Download `install.ps1` and `clawuno-0.7.0-windows-x64.zip` from the [Releases page](https://github.com/clawuno/clawuno/releases/latest), then run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 clawuno-0.6.9-windows-x64.zip
+powershell -ExecutionPolicy Bypass -File .\install.ps1 clawuno-0.7.0-windows-x64.zip
 ```
 
 The `-ExecutionPolicy Bypass` flag is required for locally downloaded scripts on Windows. The one-click `irm | iex` method above does not need this because it runs the script via pipeline.
 
-**Requirements:** macOS 12+ or Windows 10+. No Docker, no external database, no Node.js required — the installer is self-contained.
+**Requirements:** macOS 11+ (Apple Silicon or Intel) or Windows 10+. No Docker, no external database, no Node.js required — the installer is self-contained.
 
 ---
 
@@ -107,6 +107,36 @@ Each release includes platform-specific packages:
 
 - [Getting started](https://clawuno.com/docs)
 - [Changelog](CHANGELOG.md)
+
+---
+
+## Anonymous Usage Data
+
+Clawuno sends a small amount of anonymous data to help us understand how the
+product is used and prioritize improvements. We collect:
+
+- A randomly generated installation ID (UUID)
+- Your operating system and architecture (e.g. `darwin` / `arm64`)
+- Your Clawuno version
+- Country code, derived from your IP address at request time
+
+We do **not** collect, log, or store:
+
+- Your IP address (used only momentarily by our edge to derive country, then discarded)
+- Your name, email, or any account information
+- Anything from your sessions, agents, workspaces, or files
+
+Three events are sent: when an installation starts, when the first admin is
+created (= installation succeeded), and after each successful upgrade. Data is
+stored on Cloudflare D1 in the European Union.
+
+To disable:
+
+```bash
+clawuno telemetry off
+```
+
+To re-enable: `clawuno telemetry on`. To view current state: `clawuno telemetry`.
 
 ---
 
