@@ -4,6 +4,26 @@ All notable changes to Clawuno are documented here.
 
 ---
 
+## v0.7.1 — 2026-05-14
+
+### New
+
+- **Multi-tab file browser in Workspace** — Open multiple files in tabs with full-screen mode.
+- **Work / Run redesign** — Each Work has its own run history; re-run finished or failed works directly.
+- **Uno per-user home directory** — Each user now has a personal Uno workspace.
+- **Uno as work executor** — Uno can be assigned as the executing agent for works.
+- **Uno Panel improvements** — View Uno work sessions, slide-out settings, Memory view/edit toggle.
+- **Agent UI enhancements** — Memory + Reflections tabs, runtime stats, capability chips.
+- **Time & timezone contract** — Agents interpret user-mentioned times in deployment timezone by default.
+- **Web Fetch upgrades** — Markdown preserves images, tables, captions; new `mode=browser` for full-rendering sites.
+- **MCP system alignment** — Local manifest and Forge registry env vars match the official MCP registry schema.
+
+### Fixed
+
+- Various stability and reliability improvements.
+
+---
+
 ## v0.7.0 — 2026-04-21
 
 ### New
