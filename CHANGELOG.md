@@ -4,6 +4,76 @@ All notable changes to Clawuno are documented here.
 
 ---
 
+## v0.8.0 — 2026-09-07
+
+### New
+
+- **Clawuno Anywhere for Feishu** — Connect organization bots, bind Uno in
+  direct chats, run multiple agents in group chats, and follow live progress
+  with recoverable setup diagnostics and permission checks.
+- **Unified workspace shell** — Global Agents navigation, expandable Chat and
+  Work activity, linked local folders, workspace rename, multiple Mini Apps,
+  unified Files/Mini App/Browser/Git tabs, and a compact mobile experience.
+- **Workspace Browser and Git** — Built-in browser runtimes provide agent web
+  access and native macOS browser tabs with isolated profiles; Git status, diffs, staging, commits,
+  nested repositories, and safe local branch switching are built into the
+  workspace.
+- **Richer document work** — Continuous Office preview, legacy Office format
+  support, managed authoring runtimes, Excalidraw preview/edit/autosave/export,
+  and built-in Office and visual-design skills.
+- **Human-in-the-loop agent runs** — Durable interaction requests, multi-question
+  cards, attention updates, chat forking, generated chat titles, compact run
+  timelines, and on-demand tool details.
+- **More capable Uno** — Per-user system identity, multiple chats, floating and
+  sidecar modes, active-workspace switching, workspace-aware UI navigation,
+  starter prompts, inbox, profiles, and Work notifications.
+
+### Improved
+
+- Agent definitions are global by default and can optionally be restricted to
+  selected workspaces; legacy workspace agent definitions migrate safely.
+- File editing coordinates user, agent, and external changes with revision-aware
+  autosave and conflict handling.
+- Installation and upgrades use signed manifests, transactional generations,
+  complete bundled LibreOffice/Managed Chromium artifacts, safer backups, and
+  hardened cross-platform release gates.
+
+### Fixed
+
+- Extensive fixes across Mac engine supervision, Browser profile isolation,
+  Feishu reply deduplication, group-chat timelines, workspace navigation,
+  Office/whiteboard synchronization, uploads, and agent runtime recovery.
+- Sparkle build numbering supports upgrades from the previously published Mac app.
+
+### Compatibility
+
+- The Mac app now requires **Apple Silicon and macOS 13.5 or later**. Version
+  0.7.x is the final Intel-compatible line, and Intel installations are excluded
+  from 0.8.0 automatic updates. Linux x64 and Windows x64 remain supported.
+- Linux is distributed through Docker, with bundled runtimes, a non-root Engine,
+  persistent instance data, and isolated multi-instance deployment.
+
+## v0.7.2 — 2026-07-06 (macOS only)
+
+### New
+
+- **Native macOS app** — Clawuno now ships as a signed, notarized
+  DMG. The app owns Clawuno's lifecycle: launch it to start Clawuno,
+  quit it to fully stop the engine. Splash screen while the engine
+  boots, tray icon reflects engine state, standard menu bar with
+  Check for Updates and Uninstall.
+- **Resumable large-file uploads** — Uploads survive network hiccups
+  and browser reloads via tus protocol, up to 5 GB per file.
+- **Fullscreen workspace + multi-tab file browser** improvements
+  carried over from ongoing work.
+
+### Fixed
+
+- Numerous reliability, upload, chat scroll, model discovery, and
+  agent-switch fixes.
+
+---
+
 ## v0.7.1 — 2026-05-14
 
 ### New

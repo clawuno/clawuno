@@ -8,22 +8,16 @@ Clawuno lets you build, run, and manage AI agents that execute real work — aut
 
 ## Install
 
-### macOS — One-click
+### macOS — Apple Silicon app
+
+Download the signed DMG from [clawuno.com](https://clawuno.com), open it,
+and drag Clawuno to Applications. Clawuno 0.8.0 and later require Apple Silicon;
+the 0.7.x line is the final Intel-compatible release.
+
+### Linux — One-click
 
 ```bash
 curl -fsSL https://releases.clawuno.com/install.sh | bash
-```
-
-### macOS — Download from GitHub Releases
-
-Download `install.sh` and the package for your Mac from the [Releases page](https://github.com/clawuno/clawuno/releases/latest), then run:
-
-```bash
-# Apple Silicon (M1/M2/M3)
-bash install.sh clawuno-0.7.0-macos-arm64.tar.gz
-
-# Intel
-bash install.sh clawuno-0.7.0-macos-x64.tar.gz
 ```
 
 ### Windows — One-click (PowerShell)
@@ -34,25 +28,22 @@ irm https://releases.clawuno.com/install.ps1 | iex
 
 ### Windows — Download from GitHub Releases
 
-Download `install.ps1` and `clawuno-0.7.0-windows-x64.zip` from the [Releases page](https://github.com/clawuno/clawuno/releases/latest), then run:
+Download `install.ps1` and the Windows x64 package from the [Releases page](https://github.com/clawuno/clawuno/releases/latest), then run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 clawuno-0.7.0-windows-x64.zip
+powershell -ExecutionPolicy Bypass -File .\install.ps1 clawuno-{version}-windows-x64.zip
 ```
 
 The `-ExecutionPolicy Bypass` flag is required for locally downloaded scripts on Windows. The one-click `irm | iex` method above does not need this because it runs the script via pipeline.
 
-**Requirements:** macOS 11+ (Apple Silicon or Intel) or Windows 10+. No Docker, no external database, no Node.js required — the installer is self-contained.
+**Requirements:** Apple Silicon with macOS 13.5+, Windows 10+ x64, or a supported x64 Linux distribution. No Docker, external database, system Node.js, or install-time runtime download is required.
 
 ---
 
 ## Upgrade
 
-```bash
-clawuno upgrade
-```
-
-Detects the latest version, downloads, and upgrades in place. All your data and configuration is preserved.
+The macOS app updates through its built-in updater. Linux and Windows installations
+can run `clawuno upgrade`. Upgrades preserve data and configuration.
 
 ---
 
@@ -97,8 +88,8 @@ Each release includes platform-specific packages:
 
 | Platform | File |
 |----------|------|
-| macOS Apple Silicon | `clawuno-{version}-macos-arm64.tar.gz` |
-| macOS Intel | `clawuno-{version}-macos-x64.tar.gz` |
+| macOS Apple Silicon | Signed DMG from [clawuno.com](https://clawuno.com) |
+| Linux x64 | `clawuno-{version}-linux-x64.tar.gz` |
 | Windows x64 | `clawuno-{version}-windows-x64.zip` |
 
 ---
