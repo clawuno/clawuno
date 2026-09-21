@@ -20,34 +20,32 @@ the 0.7.x line is the final Intel-compatible release.
 curl -fsSL https://releases.clawuno.com/install.sh | bash
 ```
 
-### Windows — One-click (PowerShell)
+### Windows — Desktop app
 
-```powershell
-irm https://releases.clawuno.com/install.ps1 | iex
-```
+Download the signed Windows x64 Setup from [clawuno.com/download/windows](https://clawuno.com/download/windows) and run it directly. The single installer contains Desktop, WebView2, EngineHost, and Engine; no ZIP extraction, PowerShell script, system Node.js, or separate Engine installation is required.
 
-### Windows — Download from GitHub Releases
+**Requirements:**
 
-Download `install.ps1` and the Windows x64 package from the [Releases page](https://github.com/clawuno/clawuno/releases/latest), then run:
+- macOS: Apple Silicon with macOS 13.5 or later.
+- Windows: Windows 11 x64. The installer includes all required app and Engine runtimes.
+- Linux: a supported x64 Linux distribution with Docker Engine and the Docker Compose plugin.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 clawuno-{version}-windows-x64.zip
-```
-
-The `-ExecutionPolicy Bypass` flag is required for locally downloaded scripts on Windows. The one-click `irm | iex` method above does not need this because it runs the script via pipeline.
-
-**Requirements:** Apple Silicon with macOS 13.5+, Windows 10+ x64, or a supported x64 Linux distribution. No Docker, external database, system Node.js, or install-time runtime download is required.
+No external database or system Node.js is required.
 
 ---
 
 ## Upgrade
 
-The macOS app updates through its built-in updater. Linux and Windows installations
-can run `clawuno upgrade`. Upgrades preserve data and configuration.
+The macOS and Windows apps update through their built-in updaters. Linux installations
+upgrade through the host `clawuno` command. Upgrades preserve data and configuration.
+
+The first Windows Desktop release is a one-time transition from the 0.8.0 Engine-only package. Its old `clawuno upgrade` command cannot install the new Setup EXE: uninstall the old program while preserving `%USERPROFILE%\clawuno`, then run the signed Windows Setup. Later Windows Desktop versions update in the app.
 
 ---
 
-## CLI Reference
+## Linux Engine CLI Reference
+
+These commands are provided by the Linux Docker host deployment. macOS and Windows Desktop users manage installation and updates from the app instead.
 
 ```bash
 clawuno start       # Start the service
@@ -68,7 +66,7 @@ If Clawuno is not working as expected, run:
 clawuno doctor
 ```
 
-This checks for common issues and applies safe automatic fixes (stale processes, missing permissions, unloaded services, port conflicts with its own old processes). Additional modes:
+On Linux Engine deployments, this checks for common issues and applies safe automatic fixes (stale processes, missing permissions, unloaded services, port conflicts with its own old processes). Additional modes:
 
 ```bash
 clawuno doctor --check      # Diagnose only, no fixes
@@ -89,8 +87,8 @@ Each release includes platform-specific packages:
 | Platform | File |
 |----------|------|
 | macOS Apple Silicon | Signed DMG from [clawuno.com](https://clawuno.com) |
-| Linux x64 | `clawuno-{version}-linux-x64.tar.gz` |
-| Windows x64 | `clawuno-{version}-windows-x64.zip` |
+| Linux x64 | `clawuno-{version}-linux-docker.tar.gz` |
+| Windows x64 | Signed `Clawuno-{version}-windows-x64-Setup.exe` from [clawuno.com/download/windows](https://clawuno.com/download/windows) |
 
 ---
 
@@ -121,13 +119,13 @@ Three events are sent: when an installation starts, when the first admin is
 created (= installation succeeded), and after each successful upgrade. Data is
 stored on Cloudflare D1 in the European Union.
 
-To disable:
+On Linux Engine deployments, disable telemetry with:
 
 ```bash
 clawuno telemetry off
 ```
 
-To re-enable: `clawuno telemetry on`. To view current state: `clawuno telemetry`.
+To re-enable it, run `clawuno telemetry on`. To view the current state, run `clawuno telemetry`. macOS and Windows Desktop do not install a global `clawuno` CLI by default.
 
 ---
 
