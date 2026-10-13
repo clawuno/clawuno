@@ -4,6 +4,16 @@ All notable changes to Clawuno are documented here.
 
 ---
 
+## v0.8.3
+
+### Fixed
+
+- Restore Windows chat history in workspace navigation by normalizing session
+  index paths, including recovery of existing cached indexes.
+- Show workspace names instead of internal identifiers in workspace selection.
+- Restore Chinese navigation labels for Forge and Anywhere.
+- Show workspace names and hierarchy correctly when editing team user access.
+
 ## v0.8.2
 
 ### Improved
