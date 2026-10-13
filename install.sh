@@ -5,12 +5,11 @@
 # Mode 1 — One-click Linux install (downloads latest from CDN):
 #   curl -fsSL https://releases.clawuno.com/install.sh | bash
 #
-# Mode 2 — Local package (from GitHub Releases or manual download):
-#   bash install.sh clawuno-0.8.0-linux-x64.tar.gz [--dir ~/clawuno] [--port 9700]
+# Linux uses the signed Docker deployment path on both x86-64 and ARM64.
 #
 # What it does:
 #   Mode 1: Detects platform → fetches latest.json → downloads package → installs
-#   Mode 2: Uses the provided local .tar.gz directly → installs
+#   Other platforms retain their existing package path below.
 # ============================================================================
 
 set -euo pipefail
@@ -26,25 +25,8 @@ sha256_file() {
   fi
 }
 
-verify_signed_release_manifest() {
-  local releases_base="$1" version="$2" verify_dir manifest_file signature_file signature_binary public_key
-  case "$version" in ''|*[!A-Za-z0-9._+-]*) echo "ERROR: Invalid release version metadata." >&2; return 1 ;; esac
-  command -v openssl >/dev/null 2>&1 || {
-    echo "ERROR: openssl is required to authenticate release metadata." >&2
-    return 1
-  }
-  verify_dir=$(mktemp -d "${TMPDIR:-/tmp}/clawuno-manifest-XXXXXX") || return 1
-  manifest_file="$verify_dir/manifest.json"
-  signature_file="$verify_dir/manifest.sig"
-  signature_binary="$verify_dir/manifest.sig.bin"
-  public_key="$verify_dir/release-public.pem"
-  if ! curl -fsSL "$releases_base/releases/manifests/${version}.json" -o "$manifest_file" ||
-     ! curl -fsSL "$releases_base/releases/manifests/${version}.json.sig" -o "$signature_file"; then
-    echo "ERROR: Could not download signed release metadata for $version." >&2
-    rm -rf "$verify_dir"
-    return 1
-  fi
-  cat > "$public_key" <<'CLAWUNO_RELEASE_PUBLIC_KEY'
+write_release_public_key() {
+  cat > "$1" <<'CLAWUNO_RELEASE_PUBLIC_KEY'
 -----BEGIN PUBLIC KEY-----
 MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAuGQehM2A7B7skKZx7y4f
 lEnMZllxBh8DCt4jFlXaQw6+7aXpTjAOWM2m8io+hoxbQU3Vd5ig6ftzeXl5N4rX
@@ -57,14 +39,143 @@ lYlXrOsUmgxSiJgYob2UIN2TBeGWlcEwWgls6cWtEPsCPDIFIdT02RKSGDshQnmh
 ulGkRTvXr0injiulsXDy1KYruajtsmRAKaQiWccAEa+/AgMBAAE=
 -----END PUBLIC KEY-----
 CLAWUNO_RELEASE_PUBLIC_KEY
-  if ! openssl base64 -d -A -in "$signature_file" -out "$signature_binary" 2>/dev/null ||
-     ! openssl dgst -sha256 -verify "$public_key" -signature "$signature_binary" "$manifest_file" >/dev/null 2>&1; then
-    echo "ERROR: Release metadata signature verification failed." >&2
+}
+
+verify_signed_json() {
+  local document_url="$1" signature_url="$2" description="$3"
+  local verify_dir document_file signature_file signature_binary public_key
+  command -v openssl >/dev/null 2>&1 || {
+    echo "ERROR: openssl is required to authenticate release metadata." >&2
+    return 1
+  }
+  verify_dir=$(mktemp -d "${TMPDIR:-/tmp}/clawuno-manifest-XXXXXX") || return 1
+  document_file="$verify_dir/document.json"
+  signature_file="$verify_dir/manifest.sig"
+  signature_binary="$verify_dir/manifest.sig.bin"
+  public_key="$verify_dir/release-public.pem"
+  if ! curl --proto '=https' --proto-redir '=https' -fsSL "$document_url" -o "$document_file" ||
+     ! curl --proto '=https' --proto-redir '=https' -fsSL "$signature_url" -o "$signature_file"; then
+    echo "ERROR: Could not download signed $description." >&2
     rm -rf "$verify_dir"
     return 1
   fi
-  VERIFIED_RELEASE_MANIFEST=$(cat "$manifest_file")
+  write_release_public_key "$public_key"
+  if ! openssl base64 -d -A -in "$signature_file" -out "$signature_binary" 2>/dev/null ||
+     ! openssl dgst -sha256 -verify "$public_key" -signature "$signature_binary" "$document_file" >/dev/null 2>&1; then
+    echo "ERROR: $description signature verification failed." >&2
+    rm -rf "$verify_dir"
+    return 1
+  fi
+  VERIFIED_SIGNED_JSON=$(cat "$document_file")
   rm -rf "$verify_dir"
+}
+
+verify_signed_release_manifest() {
+  local releases_base="$1" version="$2"
+  case "$version" in ''|*[!A-Za-z0-9._+-]*) echo "ERROR: Invalid release version metadata." >&2; return 1 ;; esac
+  verify_signed_json \
+    "$releases_base/releases/manifests/${version}.json" \
+    "$releases_base/releases/manifests/${version}.json.sig" \
+    "release metadata for $version"
+  VERIFIED_RELEASE_MANIFEST="$VERIFIED_SIGNED_JSON"
+}
+
+linux_architecture() {
+  case "${1:-$(uname -m)}" in
+    x86_64|amd64) printf 'amd64\n' ;;
+    aarch64|arm64) printf 'arm64\n' ;;
+    *) echo "ERROR: Linux supports x86_64 and ARM64; found ${1:-$(uname -m)}." >&2; return 1 ;;
+  esac
+}
+
+prepare_r2_offline_image() {
+  local releases_base="$1" version="$2" temp="$3" released_image="$4" architecture="${5:-$(linux_architecture)}"
+  local descriptor_url signature_url descriptor archive_url archive image_ref actual_image
+  descriptor_url="$releases_base/releases/offline/${version}-linux-${architecture}.json"
+  signature_url="${descriptor_url}.sig"
+  echo "Checking the signed China mainland image mirror..."
+  verify_signed_json "$descriptor_url" "$signature_url" "offline image metadata for $version"
+  descriptor=$(printf '%s' "$VERIFIED_SIGNED_JSON" | python3 -c '
+import json,re,sys
+d=json.load(sys.stdin)
+def check(value,message):
+  if not value: sys.exit(message)
+check(d.get("schema")==1 and d.get("kind")=="clawuno-linux-offline-image-v1", "Unsupported offline image metadata")
+check(d.get("version")==sys.argv[1], "Offline image version mismatch")
+check(d.get("platform")==f"linux/{sys.argv[3]}", "Offline image platform mismatch")
+check(re.fullmatch(r"https://releases\.clawuno\.com/releases/offline/[A-Za-z0-9._-]+\.tar\.gz", d.get("archive_url","")), "Invalid offline image URL")
+check(re.fullmatch(r"[a-f0-9]{64}", d.get("archive_sha256","")), "Invalid offline image checksum")
+check(type(d.get("archive_size")) is int and 0 < d["archive_size"] <= 5 * 1024**3, "Invalid offline image size")
+check(re.fullmatch(r"sha256:[a-f0-9]{64}", d.get("image_config_digest","")), "Invalid offline image config digest")
+check(d.get("image_ref")==f"clawuno-offline:{sys.argv[1]}-{sys.argv[3]}", "Invalid offline image reference")
+check(re.fullmatch(r"ghcr\.io/clawuno/clawuno@sha256:[a-f0-9]{64}", d.get("source_image","")), "Invalid source image")
+check(d.get("source_image")==sys.argv[2], "Offline image does not match the signed release")
+print(json.dumps(d,separators=(",",":")))
+' "$version" "$released_image" "$architecture") || return 1
+  python3 -c '
+import json,os,sys
+d=json.loads(sys.argv[1]); target=sys.argv[2]
+space=os.statvfs(target).f_bavail * os.statvfs(target).f_frsize
+required=d["archive_size"] + 512 * 1024**2
+if space < required: sys.exit(f"Insufficient temporary space: need at least {required // 1048576} MiB free")
+' "$descriptor" "$temp" || return 1
+  archive_url=$(printf '%s' "$descriptor" | python3 -c 'import json,sys; print(json.load(sys.stdin)["archive_url"])')
+  archive="$temp/image.tar.gz"
+  echo "Downloading the verified Clawuno image from the release CDN..."
+  if ! curl --proto '=https' --proto-redir '=https' --retry 5 \
+      --connect-timeout 20 --max-filesize 5368709120 -fL "$archive_url" -o "$archive"; then
+    echo "ERROR: Offline image download failed. No deployment data was changed." >&2
+    return 1
+  fi
+  python3 -c '
+import hashlib,json,pathlib,sys
+d=json.loads(sys.argv[1]); p=pathlib.Path(sys.argv[2])
+size=p.stat().st_size
+if size != d["archive_size"]: sys.exit("Offline image size mismatch")
+h=hashlib.sha256()
+with p.open("rb") as f:
+  for chunk in iter(lambda:f.read(8*1024*1024),b""): h.update(chunk)
+if h.hexdigest()!=d["archive_sha256"]: sys.exit("Offline image checksum mismatch")
+' "$descriptor" "$archive" || return 1
+  python3 -c '
+import json,re,sys,tarfile
+d=json.loads(sys.argv[1]); archive=sys.argv[2]
+with tarfile.open(archive,"r:gz") as tf:
+  def read(name):
+    f=tf.extractfile(name)
+    if f is None: raise SystemExit("Offline archive metadata is missing")
+    return json.load(f)
+  try:
+    entry=read("index.json").get("manifests",[])[0]
+    digest=None
+    for _ in range(3):
+      value=entry.get("digest","")
+      if not re.fullmatch(r"sha256:[a-f0-9]{64}",value): break
+      doc=read("blobs/sha256/"+value[7:])
+      digest=(doc.get("config") or {}).get("digest")
+      if digest: break
+      entries=doc.get("manifests",[])
+      entry=next((x for x in entries if x.get("platform",{}).get("os")=="linux" and x.get("platform",{}).get("architecture")==sys.argv[3]), entries[0] if entries else {})
+  except (KeyError,IndexError):
+    config=read("manifest.json")[0].get("Config","")
+    digest="sha256:"+config[:-5] if re.fullmatch(r"[a-f0-9]{64}\.json",config) else None
+if digest!=d["image_config_digest"]: raise SystemExit("Offline image config digest mismatch")
+' "$descriptor" "$archive" "$architecture" || return 1
+  echo "Loading the verified Clawuno image..."
+  root_run docker load --input "$archive" >/dev/null || return 1
+  image_ref=$(printf '%s' "$descriptor" | python3 -c 'import json,sys; print(json.load(sys.stdin)["image_ref"])')
+  actual_image=$(root_run docker image inspect "$image_ref" --format '{{.Id}}' 2>/dev/null || true)
+  if ! printf '%s\n' "$actual_image" | grep -Eq '^sha256:[a-f0-9]{64}$'; then
+    echo "ERROR: Docker did not expose the loaded image." >&2
+    return 1
+  fi
+  root_run docker image inspect "$image_ref" --format '{{json .}}' | python3 -c '
+import json,sys
+d=json.load(sys.stdin); labels=d.get("Config",{}).get("Labels") or {}
+if d.get("Os")!="linux" or d.get("Architecture")!=sys.argv[1]: sys.exit("Loaded image platform mismatch")
+if labels.get("io.clawuno.distribution")!="docker-v1": sys.exit("Loaded image is not a Clawuno Docker release")
+' "$architecture" || return 1
+  PREPARED_IMAGE_ID="$actual_image"
 }
 
 validate_release_archive() {
@@ -81,23 +192,254 @@ validate_release_archive() {
   [ -n "$first_root" ] || { echo "ERROR: Release archive is empty." >&2; return 1; }
 }
 
+find_existing_docker_package() {
+  local package
+  if command -v dpkg-query >/dev/null 2>&1; then
+    for package in docker-ce docker-ce-cli docker-ce-rootless-extras docker.io docker-compose docker-compose-v2 docker-compose-plugin docker-doc docker-buildx docker-buildx-plugin podman-docker containerd containerd.io runc moby-engine; do
+      if [ "$(dpkg-query -W -f='${db:Status-Abbrev}' "$package" 2>/dev/null || true)" = "ii " ]; then
+        echo "$package"
+        return 0
+      fi
+    done
+  fi
+  if command -v rpm >/dev/null 2>&1; then
+    for package in docker-ce docker-ce-cli docker-ce-rootless-extras docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine docker-selinux docker-engine-selinux docker-compose-plugin docker-buildx-plugin podman podman-docker containerd containerd.io runc moby-engine; do
+      if rpm -q "$package" >/dev/null 2>&1; then
+        echo "$package"
+        return 0
+      fi
+    done
+  fi
+  return 1
+}
+
+find_existing_docker_repository() {
+  local distribution="$1"
+  case "$distribution" in
+    ubuntu|debian)
+      if grep -Rqs 'download\.docker\.com' /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null ||
+         [ -e /etc/apt/keyrings/docker.asc ]; then
+        echo "/etc/apt (Docker repository or key)"
+        return 0
+      fi
+      ;;
+    fedora|centos|rhel)
+      if grep -Rqs 'download\.docker\.com' /etc/yum.repos.d 2>/dev/null; then
+        echo "/etc/yum.repos.d (Docker repository)"
+        return 0
+      fi
+      ;;
+  esac
+  return 1
+}
+
+install_docker_apt_repository() {
+  local distribution="$1" codename="$2" temp repository_status architecture
+  architecture=$(linux_architecture)
+  [ -n "$codename" ] || {
+    echo "ERROR: Could not determine the $distribution release codename. Install Docker Engine and Compose v2 manually: https://docs.docker.com/engine/install/$distribution/" >&2
+    return 1
+  }
+  if ! repository_status=$(curl --proto '=https' --proto-redir '=https' --max-filesize 1048576 -sSL \
+      -o /dev/null -w '%{http_code}' "https://download.docker.com/linux/$distribution/dists/$codename/Release"); then
+    echo "ERROR: Could not reach Docker's official repository. Check DNS, TLS and proxy settings, then retry." >&2
+    return 1
+  fi
+  if [ "$repository_status" != 200 ]; then
+    if [ "$repository_status" = 404 ]; then
+      echo "ERROR: Docker does not publish an official repository for this $distribution release ($codename). Install Docker Engine and Compose v2 manually: https://docs.docker.com/engine/install/$distribution/" >&2
+    else
+      echo "ERROR: Docker's official repository returned HTTP $repository_status. Retry later or install Docker manually: https://docs.docker.com/engine/install/$distribution/" >&2
+    fi
+    return 1
+  fi
+  temp=$(mktemp -d /tmp/clawuno-docker-repository-XXXXXX)
+  if ! curl --proto '=https' --proto-redir '=https' -fsSL \
+      "https://download.docker.com/linux/$distribution/gpg" -o "$temp/docker.asc"; then
+    rm -rf "$temp"
+    echo "ERROR: Could not download Docker's repository signing key." >&2
+    return 1
+  fi
+  cat > "$temp/docker.sources" <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/$distribution
+Suites: $codename
+Components: stable
+Architectures: $architecture
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+  if ! root_run apt-get update ||
+     ! root_run apt-get install -y --no-install-recommends ca-certificates ||
+     ! root_run install -m 0755 -d /etc/apt/keyrings ||
+     ! root_run install -m 0644 "$temp/docker.asc" /etc/apt/keyrings/docker.asc ||
+     ! root_run install -m 0644 "$temp/docker.sources" /etc/apt/sources.list.d/docker.sources ||
+     ! root_run apt-get update ||
+     ! root_run apt-get install -y --no-remove docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+    root_run rm -f /etc/apt/sources.list.d/docker.sources /etc/apt/keyrings/docker.asc || true
+    rm -rf "$temp"
+    echo "ERROR: Docker package installation failed. Existing packages were not removed, and the repository files added by this attempt were removed. Review Docker's instructions: https://docs.docker.com/engine/install/$distribution/" >&2
+    return 1
+  fi
+  rm -rf "$temp"
+}
+
+install_docker_rpm_repository() {
+  local distribution="$1" version="$2" releasever repository_status architecture
+  architecture=$(linux_architecture)
+  [ "$architecture" = amd64 ] && architecture=x86_64 || architecture=aarch64
+  local repository="https://download.docker.com/linux/$distribution/docker-ce.repo"
+  releasever=${version%%.*}
+  case "$releasever" in ''|*[!0-9]*)
+    echo "ERROR: Could not determine the $distribution release version. Install Docker Engine and Compose v2 manually: https://docs.docker.com/engine/install/$distribution/" >&2
+    return 1
+    ;;
+  esac
+  if ! repository_status=$(curl --proto '=https' --proto-redir '=https' --max-filesize 1048576 -sSL \
+      -o /dev/null -w '%{http_code}' "https://download.docker.com/linux/$distribution/$releasever/$architecture/stable/repodata/repomd.xml"); then
+    echo "ERROR: Could not reach Docker's official repository. Check DNS, TLS and proxy settings, then retry." >&2
+    return 1
+  fi
+  if [ "$repository_status" != 200 ]; then
+    if [ "$repository_status" = 404 ]; then
+      echo "ERROR: Docker does not publish an official repository for this $distribution release ($version). Install Docker Engine and Compose v2 manually: https://docs.docker.com/engine/install/$distribution/" >&2
+    else
+      echo "ERROR: Docker's official repository returned HTTP $repository_status. Retry later or install Docker manually: https://docs.docker.com/engine/install/$distribution/" >&2
+    fi
+    return 1
+  fi
+  if ! root_run dnf -y install dnf-plugins-core; then
+    echo "ERROR: Docker package installation failed. Existing packages were not removed. Review Docker's instructions: https://docs.docker.com/engine/install/$distribution/" >&2
+    return 1
+  fi
+  # DNF5 changed config-manager's repository syntax; retain the DNF4 fallback.
+  if ! root_run dnf config-manager addrepo "--from-repofile=$repository" 2>/dev/null &&
+     ! root_run dnf config-manager --add-repo "$repository"; then
+    root_run rm -f /etc/yum.repos.d/docker-ce.repo || true
+    echo "ERROR: Docker's package repository could not be configured. Review Docker's instructions: https://docs.docker.com/engine/install/$distribution/" >&2
+    return 1
+  fi
+  if ! root_run dnf -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; then
+    root_run rm -f /etc/yum.repos.d/docker-ce.repo || true
+    echo "ERROR: Docker package installation failed. Existing packages were not removed, and the repository file added by this attempt was removed. Review Docker's instructions: https://docs.docker.com/engine/install/$distribution/" >&2
+    return 1
+  fi
+}
+
+install_docker_from_official_repository() {
+  local os_release_file="${1:-/etc/os-release}"
+  local ID="" VERSION_ID="" VERSION_CODENAME="" NAME="Linux" existing
+  [ -r "$os_release_file" ] || {
+    echo "ERROR: Cannot identify this Linux distribution. Install Docker Engine and Compose v2, then retry: https://docs.docker.com/engine/install/" >&2
+    return 1
+  }
+  # os-release is the system-provided source of distribution identity.
+  # shellcheck disable=SC1090
+  . "$os_release_file"
+  if existing=$(find_existing_docker_package); then
+    echo "ERROR: Existing or conflicting package '$existing' must be reviewed before installing Docker. It will not be replaced or removed automatically." >&2
+    return 1
+  fi
+  case "$ID" in
+    ubuntu|debian)
+      command -v apt-get >/dev/null 2>&1 || {
+        echo "ERROR: apt-get is unavailable. Install Docker manually: https://docs.docker.com/engine/install/$ID/" >&2
+        return 1
+      }
+      if existing=$(find_existing_docker_repository "$ID"); then
+        echo "ERROR: Existing Docker repository configuration was found at $existing. It will not be overwritten automatically." >&2
+        return 1
+      fi
+      echo "Installing Docker Engine and Compose v2 for ${NAME:-$ID} from Docker's official package repository..."
+      install_docker_apt_repository "$ID" "${VERSION_CODENAME:-}"
+      ;;
+    fedora|centos|rhel)
+      command -v dnf >/dev/null 2>&1 || {
+        echo "ERROR: dnf is unavailable. Install Docker manually: https://docs.docker.com/engine/install/$ID/" >&2
+        return 1
+      }
+      if existing=$(find_existing_docker_repository "$ID"); then
+        echo "ERROR: Existing Docker repository configuration was found at $existing. It will not be overwritten automatically." >&2
+        return 1
+      fi
+      echo "Installing Docker Engine and Compose v2 for ${NAME:-$ID} from Docker's official package repository..."
+      install_docker_rpm_repository "$ID" "${VERSION_ID:-}"
+      ;;
+    *)
+      echo "ERROR: Automatic Docker setup is not available for ${NAME:-$ID}. Install Docker Engine and Compose v2 for this distribution, then retry: https://docs.docker.com/engine/install/" >&2
+      return 1
+      ;;
+  esac
+  command -v systemctl >/dev/null 2>&1 || {
+    echo "ERROR: Docker was installed, but systemd is unavailable. Start the Docker daemon using this distribution's service manager, then retry." >&2
+    return 1
+  }
+  root_run systemctl enable --now docker
+}
+
+confirm_docker_install() {
+  local preauthorized="$1" input="${2:-/dev/tty}" answer=""
+  [ "$preauthorized" = true ] && return 0
+  echo "Docker is required. Install Docker Engine and Compose v2 from Docker's official package repository? [y/N]"
+  read -r answer <"$input" || {
+    echo "Use --install-docker to explicitly authorize prerequisite installation." >&2
+    return 1
+  }
+  case "$answer" in y|Y|yes|YES) return 0 ;; *) echo "Cancelled. Docker was not installed."; return 1 ;; esac
+}
+
+verify_docker_runtime() {
+  docker compose version >/dev/null || {
+    echo "Install/repair Docker Compose v2, then retry. Existing Docker was not replaced." >&2
+    return 1
+  }
+  root_run docker info >/dev/null || {
+    echo "Docker is not running or is inaccessible. Start Docker, then retry." >&2
+    return 1
+  }
+}
+
 install_linux_docker() {
-  local version="" arg previous="" install_docker=false
+  local version="" install_docker=false image_source="registry"
   local -a forwarded=()
-  for arg in "$@"; do
-    if [ "$arg" = "--help" ]; then
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "--help" ]; then
       echo "Clawuno Linux Docker installer"
       echo "Options: --instance NAME --port PORT --dir PATH --version VERSION --yes --install-docker"
       echo "Default: install one instance, then use sudo clawuno upgrade."
       return
     fi
-    if [ "$arg" = "--install-docker" ]; then install_docker=true; continue; fi
-    [ "$previous" = "--version" ] && version="$arg"
-    previous="$arg"
-    forwarded+=("$arg")
-    case "$arg" in *.tar.gz|*.zip) echo "ERROR: Linux uses Docker. Load an offline OCI image and use the Docker deployment bundle, not a native archive." >&2; return 1 ;; esac
+    case "$1" in
+      --install-docker)
+        install_docker=true
+        shift
+        ;;
+      --image-source)
+        [ "$#" -ge 2 ] || { echo "ERROR: --image-source requires a value." >&2; return 1; }
+        image_source="$2"
+        shift 2
+        ;;
+      --version)
+        [ "$#" -ge 2 ] || { echo "ERROR: --version requires a value." >&2; return 1; }
+        version="$2"
+        forwarded+=("$1" "$2")
+        shift 2
+        ;;
+      *.tar.gz|*.zip)
+        echo "ERROR: Linux uses Docker. Load an offline OCI image and use the Docker deployment bundle, not a native archive." >&2
+        return 1
+        ;;
+      *)
+        forwarded+=("$1")
+        shift
+        ;;
+    esac
   done
-  [ "$(uname -m)" = "x86_64" ] || { echo "ERROR: Linux currently supports x86_64 only." >&2; return 1; }
+  [ "$image_source" = registry ] || [ "$image_source" = r2 ] || {
+    echo "ERROR: Unsupported image source '$image_source'." >&2
+    return 1
+  }
+  local architecture
+  architecture=$(linux_architecture) || return 1
   for arg in python3 curl openssl; do
     command -v "$arg" >/dev/null || { echo "ERROR: Install the host prerequisite '$arg', then rerun this command." >&2; return 1; }
   done
@@ -119,29 +461,58 @@ if d.get("kind")!="docker-v1" or d.get("manager_api")!=1: sys.exit("No compatibl
 if not re.fullmatch(r"https://releases\.clawuno\.com/releases/[A-Za-z0-9._-]+\.tar\.gz",d["url"]): sys.exit("Invalid bundle URL")
 if not re.fullmatch(r"[a-f0-9]{64}",d["sha256"]): sys.exit("Invalid bundle checksum")
 if not (type(d["size"]) is int and 0<d["size"]<=10485760): sys.exit("Invalid bundle size")
-print(json.dumps(d))')
+arch=sys.argv[1]
+variants=d.get("architectures")
+if variants is None:
+  if arch!="amd64": sys.exit("This release does not include a Linux ARM64 image.")
+  selected={"image":d.get("image"),"download_size":d.get("download_size"),"required_space":d.get("required_space")}
+else:
+  if set(variants)!={"amd64","arm64"}: sys.exit("Release must contain exactly amd64 and arm64 images")
+  image_pattern=r"[A-Za-z0-9][A-Za-z0-9._:/-]*@sha256:[a-f0-9]{64}"
+  if not re.fullmatch(image_pattern,d.get("image","")): sys.exit("Invalid Linux OCI index image")
+  repo=d["image"].split("@",1)[0]
+  for name in ("amd64","arm64"):
+    variant=variants.get(name)
+    if type(variant) is not dict or not re.fullmatch(image_pattern,variant.get("image","")): sys.exit(f"Invalid {name} image")
+    for key in ("download_size","required_space"):
+      if type(variant.get(key)) is not int or variant[key]<=0: sys.exit(f"Invalid {name} image budget")
+    if variant["required_space"]<variant["download_size"]: sys.exit(f"Invalid {name} free-space budget")
+    if variant["image"].split("@",1)[0]!=repo: sys.exit("Linux index and child images must use one repository")
+  selected=variants.get(arch) or {}
+if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]*@sha256:[a-f0-9]{64}",selected.get("image","")): sys.exit("Invalid architecture image")
+for key in ("download_size","required_space"):
+  if type(selected.get(key)) is not int or selected[key]<=0: sys.exit("Invalid architecture image budget")
+if selected["required_space"]<selected["download_size"]: sys.exit("Invalid architecture free-space budget")
+if variants is not None:
+  if d.get("download_size")!=max(v.get("download_size",0) for v in variants.values()) or d.get("required_space")!=max(v.get("required_space",0) for v in variants.values()): sys.exit("Top-level Linux image budget mismatch")
+print(json.dumps({**d,**selected,"architecture":arch,"index_image":d.get("image")}))' "$architecture")
   if ! command -v docker >/dev/null; then
-    if [ "$install_docker" != true ]; then
-      echo "Docker is required. Install Docker from Ubuntu system packages? [y/N]"
-      local answer=""
-      read -r answer </dev/tty || { echo "Use --install-docker to explicitly authorize prerequisite installation." >&2; return 1; }
-      case "$answer" in y|Y|yes|YES) ;; *) echo "Cancelled. Docker was not installed."; return 1 ;; esac
-    fi
-    if ! grep -q '^ID=ubuntu$' /etc/os-release || ! grep -q '^VERSION_ID="24.04"$' /etc/os-release; then
-      echo "Automatic Docker setup supports Ubuntu 24.04. Install Docker Engine + Compose v2 for your distribution, then retry." >&2
+    confirm_docker_install "$install_docker"
+    install_docker_from_official_repository
+  fi
+  verify_docker_runtime
+  local temp archive url image_id=""
+  temp=$(mktemp -d /tmp/clawuno-docker-bootstrap-XXXXXX)
+  if [ "$image_source" = r2 ]; then
+    local released_image
+    released_image=$(printf '%s' "$descriptor" | python3 -c 'import json,sys; print(json.load(sys.stdin)["image"])')
+    if ! prepare_r2_offline_image https://releases.clawuno.com "$version" "$temp" "$released_image" "$architecture"; then
+      rm -rf "$temp"
       return 1
     fi
-    if dpkg-query -W -f='${Status}' docker-ce docker-ce-cli 2>/dev/null | grep -q 'install ok installed'; then
-      echo "An existing Docker installation needs repair. It will not be replaced automatically." >&2; return 1
-    fi
-    root_run apt-get update
-    root_run apt-get install -y --no-upgrade --no-install-recommends docker.io docker-compose-v2
-    root_run systemctl enable --now docker
+    image_id="$PREPARED_IMAGE_ID"
+    # The host CLI accepts either --version (registry resolution) or a local
+    # content-addressed image ID. The mirror has already authenticated the
+    # exact version, so use only the image ID for bootstrap.
+    local -a local_forwarded=()
+    local skip_next=false item
+    for item in "${forwarded[@]}"; do
+      if [ "$skip_next" = true ]; then skip_next=false; continue; fi
+      if [ "$item" = "--version" ]; then skip_next=true; continue; fi
+      local_forwarded+=("$item")
+    done
+    forwarded=("$image_id" "${local_forwarded[@]}")
   fi
-  docker compose version >/dev/null || { echo "Install/repair Docker Compose v2, then retry. Existing Docker was not replaced." >&2; return 1; }
-  root_run docker info >/dev/null || { echo "Docker is not running or is inaccessible. Start Docker, then retry." >&2; return 1; }
-  local temp archive url
-  temp=$(mktemp -d /tmp/clawuno-docker-bootstrap-XXXXXX)
   archive="$temp/deploy.tar.gz"
   url=$(printf '%s' "$descriptor" | python3 -c 'import json,sys; print(json.load(sys.stdin)["url"])')
   echo "Downloading verified deployment tools..."

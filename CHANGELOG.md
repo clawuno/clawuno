@@ -4,6 +4,25 @@ All notable changes to Clawuno are documented here.
 
 ---
 
+## v0.8.2
+
+### Improved
+
+- Linux deployment supports native x64 and ARM64 runtimes, with architecture-aware
+  installation, upgrades and offline image delivery.
+- The Linux ARM64 Office runtime includes an updated Calc import library for
+  spreadsheet preview conversion.
+- Windows distribution uses Azure Artifact Signing Public Trust for the Desktop
+  application and installer.
+- Model configuration, agent browser interaction and document workflows include
+  reliability improvements and clearer diagnostics.
+- macOS Engine upgrades preserve legacy workspace references without expanding
+  their access scope.
+
+### Known Limitations
+
+- Knowledge Base remains unavailable in production builds.
+
 ## v0.8.0 — 2026-09-07
 
 ### New
